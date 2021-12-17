@@ -12,4 +12,4 @@
 
 | Date | Asset | Description | Data Collected |
 |---|---|---|:---:|
-| 01.01.2020 | Example-Asset | Description for example asset <br> - Tweet by... <br> - Reddit sub... | [x] |
+| 01.01.2020 | Example-Asset | Description for example asset <br> - Tweet by... <br> - Reddit sub... | ✔️ |
