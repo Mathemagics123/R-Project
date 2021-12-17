@@ -6,7 +6,7 @@
 
 **Historic price explosions**
 - Datapoints:
-  - Price (hourly-candles, high open low close)
+  - Price (hourly-candles, open high low close)
   - Tweets
   - Reddit posts
 
