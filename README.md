@@ -10,6 +10,6 @@
   - Tweets
   - Reddit posts
 
-| Date | Asset | Description | Data |
-|---|---|---|---|
-| 01.01.2020 | Example-Asset | Description for example asset <br> - Tweet by... <br> - Reddit sub... | <ul><li>[ ]</li></ul>
+| Date | Asset | Description | Data Collected |
+|---|---|---|:---:|
+| 01.01.2020 | Example-Asset | Description for example asset <br> - Tweet by... <br> - Reddit sub... | [x] |
