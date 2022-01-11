@@ -8,7 +8,7 @@ Analyze the correlation between asset price and social media activity for crypto
 - Crypto archive with symbol (XXX) and name for 3758 crypto tokens
 
 [**price_histories/**](https://github.com/Mathemagics123/R-Project/tree/main/data/price_histories)
-- Price histories (open, high, low, close, volume) for 3399 crypto tokens from 01.01.2017 to 31.12.2021
+- Price histories (open, high, low, close, volume) for 3398 crypto tokens from 01.01.2017 to 31.12.2021
 
 [**coin_info.json**](https://github.com/Mathemagics123/R-Project/blob/main/data/coin_info.json)
 - Meta data for 7584 crypto tokens
