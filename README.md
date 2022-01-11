@@ -1,15 +1,14 @@
 # R-Project
 
-**Task:** Find reliable markers for "blow-up" potential of small cap crypto assets (_price-pressure_).
+Analyze the correlation between asset price and social media activity for crypto assets with low market capitalization.
 
 # Datasets
 
-**Historic price explosions**
-- Datapoints:
-  - Price (hourly-candles, open high low close)
-  - Tweets
-  - Reddit posts
+[**coin.json**](https://github.com/Mathemagics123/R-Project/blob/main/data/coin.json)
+- Crypto archive with symbol (XXX) and name for 3758 crypto tokens
 
-| Date | Asset | Description | Data Collected |
-|---|---|---|:---:|
-| 01.01.2020 | Example-Asset | Description for example asset <br> - Tweet by... <br> - Reddit sub... | ✔️ |
+[**price_histories/**](https://github.com/Mathemagics123/R-Project/tree/main/data/price_histories)
+- Price histories (open, high, low, close, volume) for 2171 crypto tokens from 01.01.2017 to 31.12.2021
+
+[**coin_info.json**](https://github.com/Mathemagics123/R-Project/blob/main/data/coin_info.json)
+- Meta data for 7584 crypto tokens
