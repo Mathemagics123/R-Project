@@ -1,0 +1,523 @@
+---
+title: "R-Project"
+output:
+    html_document:
+        toc: true
+---
+
+## Dependencies
+
+```{r, message=FALSE}
+library(tidyverse)
+library(tidyquant)
+library(MASS)
+library(gridExtra)
+library(jsonlite)
+library(lmtest)
+library(dynlm)
+```
+
+## Motivation
+
+Die Korrelation zwischen Social-Media Aktivität und Aktienpreisen wurde bereits in einer vielzahl von Forschungsarbeiten untersucht, wobei wiederholt die Schlussfolgerung erreicht wird, dass Nennungen alleine kein zuverlässiger Indikator für signifikante positive Preisbewegungen sind. Grund dafür sind die beidseitige Wechselwirkung zwischen Social-Media Aktivität und Asset-Preis sowie das Vermischen positiver und negativer Sentimente in den Beiträgen. Vereinfacht gesagt, die Social-Media Daten beinhalten zu viele Störsignale und müssen zunächst aufwendig gefiltert werden um jeglichen Nutzen für die Preisvorhersage zu liefern.
+
+Diese Exploration wurde Motiviert durch die Hypothese, dass die Aktivität in sozialen Netzwerken bezüglich Assets von *geringer* popularität bedeutend weniger Störsignale enthält und daher, potenziell bereits in roher Form, einen besseren Indikator für Preisbewegungen liefert.
+
+## Datenaufbereitung
+
+Im Folgenden wird 
+
+Der einfachheit halber wird angenommen, dass ein Token nur einmal *prominent* werden kann. Daher wird je Asset maximal ein Zeitpunk gesetzt, wo der erste *breakout* angenommen wird.
+
+Zur Klassifizierung werden hier die Faktoren: Preis, Marktkapitalisierung, und Popularität berücksichtigt. Die Klassifikationskriterien werden im Folgenden anhand  des Beispiels *Shiba Inu* illustiert:
+
+```{r}
+symbol <- "SHIB"
+```
+
+### Preis
+
+Von Bedeutung sind signifikante positive Preisbewegungen innerhalb kurzer Zeit. Als Indikator wird daher die Differenz zwischen Preis und einem 50-Tägigen laufenden Mittel (SMA50) betrachtet.
+
+```{r, fig.height=3, message=FALSE, warning=FALSE}
+price_df <- as_tibble(read.csv(file=sprintf("data/price_histories/%s.csv", symbol))) %>%
+    mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
+    filter(open > 0 | close > 0 | high > 0 | low > 0)
+
+price_df %>%
+    ggplot(aes(x=time, y=close)) +
+    geom_candlestick(aes(open=open, high=high, low=low, close=close)) +
+    geom_ma(ma_fun = SMA, n = 50, color = "black", size = 1) +
+    geom_smooth(se=FALSE) +
+    labs(title=symbol, x="Time", y="Price (USD)")
+
+# simple moving average
+sma <- function(x, n=50) {
+    len = length(x)
+    if(len >= n) {
+        return(stats::filter(x, rep(1/n, n), sides = 1))
+    } else {
+        return(rep(NA, n))
+    }
+}
+
+# relative delta indicator
+relative_delta <- function(x, n=50) {
+    len = length(x)
+    ma <- sma(x,n)
+    relative_delta = list()
+    for (i in 1:len) {
+        relative_delta[i] <- if (is.na(ma[i])) NA else (x[i] - ma[i])/ma[i]
+    }
+    return(unlist(relative_delta))
+}
+
+ggplot(data.frame(x=price_df$time, y=relative_delta(price_df$close))) +
+    geom_area(mapping=aes(x=x, y=y, fill=(y > 0))) +
+    geom_line(aes(x=x, y=y)) +
+    geom_hline(yintercept=2, linetype='dotted') +
+    geom_hline(yintercept=1, linetype='dotted') +
+    geom_hline(yintercept=-1, linetype='dotted') +
+    geom_hline(yintercept=-2, linetype='dotted') +
+    guides(fill="none") +
+    labs(title=sprintf("%s: Relative Delta", symbol), x="Time", y="y")
+```
+
+```{r, include=FALSE}
+# volume
+price_df %>%
+    ggplot(aes(x=time, y=volumeto)) +
+    geom_segment(aes(xend=time, yend=0)) +
+    geom_ma(ma_fun = SMA, n = 50, color = "black", size = 1) +
+    geom_smooth(se=FALSE)
+
+```
+
+Es wird festgelegt, dass eine Preissteigerung von mehr als 200% bezüglich des Durschnittspreises der letzten 50 Tage eine singifikante positive Preisbewegung klassifiziert.
+
+**Kriterium**: `relative_delta > 2.0`
+
+### Marktkapitalisierung
+
+Da uns nur die aktuellen und keine historischen Daten für die Marktkapitalisierung der hier betrachteten Assets vorliegen wird die historische Marktkapitalisierung mithilfe der Preishistorie abgeschätzt, vorgemerkt, unter Vernachlässigung von quantitativem Easing/Tightening.
+
+```{r, fig.height=3, message=FALSE, warning=FALSE}
+
+# plot approximated
+mktcap_df <- as_tibble(read.csv(file="data/mktcap.csv"))
+
+# cleanup
+mktcap_df <- mktcap_df %>%
+    filter(supply > 0 &
+           (circulatingSupply > 0
+            | conversionType == "direct")) %>%
+    arrange(mktcap)
+
+r_mktcap <-  mktcap_df %>% pull(mktcap) %>% log1p()
+
+mktcap_df %>%
+    ggplot() +
+    geom_hline(yintercept=mean(r_mktcap), color="grey") +
+    geom_point(aes(x=1:length(r_mktcap), y=log1p(circulatingSupplyMktcap)),
+               color="grey") +
+    geom_point(aes(x=1:length(r_mktcap), y=log1p(mktcap))) +
+    geom_vline(xintercept=round(0.90*length(r_mktcap)), color="blue") +
+    xlab("Ordnungsstatistik")
+
+plot_q <- mktcap_df %>%
+    ggplot(aes(sample=log1p(mktcap))) +
+    geom_qq() +
+    geom_qq_line() +
+    labs(title="Q-Q-Normal")
+
+norm_fit <- fitdistr(r_mktcap, "normal")
+plot_d <- mktcap_df %>%
+    ggplot(aes(x=log1p(mktcap))) +
+    stat_function(fun=dnorm,
+                  args=list(mean=norm_fit$estimate["mean"], 
+                            sd=norm_fit$estimate["sd"]),
+                  color="red", size=0.25) +
+    geom_density() +
+    labs(title="Density")
+
+grid.arrange(plot_q, plot_d, ncol=2)
+```
+
+Die Normalverteilung approximiert die Verteilung von `log1p(mktcap)` nur grob (hier mit Erwartungswert `r norm_fit$estimate["mean"]` und Standardabweichung `r norm_fit$estimate["sd"]`) und wird daher nicht zur Extrapolation herangezogen.
+
+Für die Analyse werden alle Assets aussortiert, deren Marktkapitalisierung unmittelbar vor dem Zeitpunkt des *breakouts* nicht innerhalb des linksseitigen 90%-Quantils lag. Assets deren Marktkapitaldaten nicht im Datensatz enthalten ist, werden auch hinzugefügt, da bei diesem Datensatz tendeziell die größten Assets am vollständigsten enthalten sind. 
+
+**Krierium**: `mktcap_prob() ?? 0.0 < 0.9`
+
+### Popularität
+
+Die Popularität wird anhand der Reddit-Aktivität sowie der Anzahl zugehöriger Anfragen auf der Seite *www.cryptocompare.com* bemessen.
+
+```{r, fig.height=4, message=FALSE, warning=FALSE}
+
+plot_social <- function(symbol) {
+    social_df <- as_tibble(read.csv(file=sprintf("data/social_stats/%s.csv", symbol))) %>%
+        mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
+        mutate(total_page_views=total_page_views-lag(total_page_views)) %>%
+        dplyr::select(time, reddit_comments_per_day, reddit_posts_per_day, total_page_views) %>%
+        filter(reddit_comments_per_day > 0 | reddit_posts_per_day > 0 | total_page_views > 0)
+
+    plot_cc_social <- social_df %>%
+        ggplot(aes(x=time, y=total_page_views)) +
+        geom_line() +
+        labs(title=sprintf("%s: CryptoCompare Total Views", symbol),
+             x="Time",
+             y="#Views")
+
+    plot_reddit_post <- social_df %>%
+        ggplot(aes(x=time, y=reddit_posts_per_day)) +
+        geom_line(color="darkorange3") +
+        labs(title=sprintf("%s: Reddit Posts", symbol),
+             x="Time",
+             y="#Posts")
+
+    plot_reddit_comment <- social_df %>%
+        ggplot(aes(x=time, y=reddit_comments_per_day)) +
+        geom_line(color="orange") +
+        labs(title=sprintf("%s: Reddit Comments", symbol),
+             x="Time",
+             y="#Comments")
+    
+    grid.arrange(
+        plot_cc_social,
+        plot_reddit_post,
+        plot_reddit_comment,
+        nrow=3)
+}
+```
+
+Um zu beobachten, in welchen charakteristischen Merkmalen sich die hier betrachteten Daten für Tokens von unterschiedlicher popularität unterscheiden, vergleichen wir zunächst die Crypto-Tokens *Air* (unpopulär), *Shiba Inu* (mittel-populär) und *Bitcoin* (populär).
+
+```{r, fig.height=4, message=FALSE, warning=FALSE, eval=TRUE}
+plot_social("AIR")
+plot_social(symbol) # SHIB
+plot_social("BTC")
+```
+
+Während die Social-Media Daten von BTC und SHIB sich in einer ähnlichen Größenordnung bewegen ist die Social-Media Aktivität von AIR 1-2 Größenordnungen kleiner.
+
+Wir stellen fest, dass diese Daten in roher Form kein absolutes Maß für die Popularität des jeweiligen Assets darstellen und daher wenn nur nach sorgfältiger Analyse eine zuverlässige Aussage über die absolute Popularität treffen. Dies ist vor allem Fehleranfällig. Da wir mit der Marktkapitalisierung bereits ein gutes Kriterium haben um bereits populäre Assets herauszufiltern werden wir davon absehen diese Daten als Filterkriterium für Breakouts zu verwenden.
+
+### Datensatz
+
+Mithilfe der spezifizierten Filterkriterien wird nun ein Datensatz erstellt.
+
+## Analyse
+
+### Exploration
+
+```{r, fig.height=7, message=FALSE, warning=TRUE}
+
+plot_full_profile <- function(symbol) {
+    # load cleaned price data
+    price_df <- as_tibble(read.csv(file=sprintf("data/price_histories/%s.csv", symbol))) %>%
+        mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
+        mutate(close=ifelse(relative_delta(.$close) >= 10, runmed(close, 49), close)) %>%
+        mutate(open=ifelse(relative_delta(.$open) >= 10, runmed(open, 49), open)) %>%
+        mutate(high=ifelse(relative_delta(.$high) >= 10, runmed(high, 49), high)) %>%
+        mutate(low=ifelse(relative_delta(.$low) >= 10, runmed(low, 49), low)) %>%
+        filter(open > 0 | close > 0 | high > 0 | low > 0)
+
+    start_date <- (price_df %>% pull(time))[1]
+
+    plot_price <- price_df %>%
+        ggplot(aes(x=time, y=close)) +
+        geom_line(color="navy") +
+        labs(title=symbol, x="Time", y="Price (USD)")
+    
+    plot_volume <- price_df %>%
+        ggplot() +
+        geom_line(aes(x=time, y=volumeto), color="blue") +
+        #geom_line(aes(x=time, y=volumefrom), color="grey") +
+        labs(title=sprintf("%s: Volume", symbol), x="Time", y="Volume (USD)")
+
+    # load social data
+    social_df <- as_tibble(read.csv(file=sprintf("data/social_stats/%s.csv", symbol))) %>%
+        mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
+        mutate(total_page_views=total_page_views-lag(total_page_views)) %>%
+        dplyr::select(time, reddit_comments_per_day, reddit_posts_per_day, total_page_views) %>%
+        filter(time >= start_date)
+
+    plot_cc_social <- social_df %>%
+        ggplot(aes(x=time, y=total_page_views)) +
+        geom_line() +
+        labs(title=sprintf("%s: CryptoCompare Total Views", symbol), x="Time", y="#Views")
+
+    plot_reddit_post <- social_df %>%
+        ggplot(aes(x=time, y=reddit_posts_per_day)) +
+        geom_line(color="darkorange3") +
+        labs(title=sprintf("%s: Reddit Posts", symbol), x="Time", y="#Posts")
+
+    plot_reddit_comment <- social_df %>%
+        ggplot(aes(x=time, y=reddit_comments_per_day)) +
+        geom_line(color="orange") +
+        labs(title=sprintf("%s: Reddit Comments", symbol), x="Time", y="#Comments")
+    
+    grid.arrange(plot_price, plot_volume, plot_cc_social, plot_reddit_post, plot_reddit_comment, nrow=5)
+}
+```
+
+Wir plotten nun nochmal die drei Crypto Assets *Air*, *Shiba Inu* und *Bitcoin*, jetzt allerdings zusammen mit Preis- und Volumendaten:
+
+```{r, fig.height=7, message=FALSE, warning=FALSE, eval=TRUE}
+plot_full_profile("AIR")
+plot_full_profile(symbol) # SHIB
+plot_full_profile("BTC")
+```
+
+
+### Granger Kausalität
+
+Um zu entscheiden, ob die hier vorliegenden Social-Media Daten ein angemessener Prädiktor für den Preis des zugehörigen Tokens sind führen wir einen *Granger Causality* Hypothesentest durch mit folgenden Hypothesen:
+
+$$H_0: \text{Der Assetpreis wird nicht von den zugehörigen Social-Media Daten Granger-verursacht}$$
+$$H_1: \text{Social-Media Daten Granger-verursachen den zugehörigen Assetpreis}$$
+
+Als Gegenprobe führen wir im Anschluss einen umgekehrten Granger-Causality Test durch um festzustellen, ob potenziell eine rückseitige Wechselwirkung zwischen Social-Media Daten und Preis vorliegt.
+
+```{r}
+granger_test <- function(x, y, order) {
+    x=ts(x)
+    y=ts(y)
+    m1 = dynlm(y ~ L(y, 1:order) + L(x, 1:order))
+    m2 = dynlm(y ~ L(y, 1:order))
+    return(result <-anova(m1, m2, test="F"))
+}
+
+granger_test_full <- function(x, y, order=3) {
+    test_main <- granger_test(x=x, y=y, order=order) # y ~ x
+    test_reverse <- granger_test(x=y, y=x, order=order) # x ~ y
+    return(list(main=test_main, reverse=test_reverse))
+}
+
+print_granger_test <- function(symbol, order=3) {
+    test_df <- as_tibble(read.csv(file=sprintf("data/price_histories/%s.csv", symbol))) %>%
+        mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
+        mutate(close=ifelse(relative_delta(.$close) >= 10, runmed(close, 49), close)) %>%
+        mutate(open=ifelse(relative_delta(.$open) >= 10, runmed(open, 49), open)) %>%
+        mutate(high=ifelse(relative_delta(.$high) >= 10, runmed(high, 49), high)) %>%
+        mutate(low=ifelse(relative_delta(.$low) >= 10, runmed(low, 49), low)) %>%
+        filter(open > 0 | close > 0 | high > 0 | low > 0)
+    
+    start_date <- (test_df %>% pull(time))[1]
+
+    test_df <- test_df %>%
+        add_column(as_tibble(read.csv(file=sprintf("data/social_stats/%s.csv", symbol))) %>%
+            mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
+            mutate(total_page_views=total_page_views-lag(total_page_views)) %>%
+            filter(time >= start_date) %>%
+            dplyr::select(-time, -X))
+
+    # show test results
+    print(sprintf("Price ~ CryptoCompare Total Page Views | (%i)", nrow(test_df)))
+    test <- granger_test_full(x=test_df %>% pull(close),
+                         y=test_df %>% pull(total_page_views),
+                         order=order)
+    print(test$main)
+    print("Reverse:")
+    print(test$reverse)
+}
+```
+
+```{r, eval=TRUE}
+print_granger_test("1SG")
+print_granger_test(symbol) # SHIB
+print_granger_test("BTC")
+```
+
+Hier können mehrere Beobachtungen gemacht werden:
+
+1. BTC, das populärste der 3 Assets, liefert einen p-Wert, weit über dem gesetzten Signifikanzniveau, sodass $H_1$ abgelehnt wird, also laut diesem Test keine Kausalität zwischen den Variablen besteht.
+2. Sowohl AIR, als auch SHIB haben einen p-Wert < $\alpha$. Demnach wird die Nullhypothese abgelehnt. Allerdings schlägt auch der reverse-Test an, was indikativ für eine beidseitige Wechselwirkung ist.
+
+### Big Data
+
+Datensatz mit historischer Marktkapitalisierung
+
+```{r, warning=FALSE, cache=TRUE, eval=TRUE}
+mktcap_history_df <- as_tibble(read.csv(file="data/price_histories/BTC.csv")) %>%
+    mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
+    dplyr::select(time)
+
+for (mktcap_symbol in mktcap_df %>% pull(symbol)) {
+    if (file.exists(sprintf("data/price_histories/%s.csv", mktcap_symbol))) {
+        price <- as_tibble(
+                read.csv(file=sprintf("data/price_histories/%s.csv", mktcap_symbol))) %>%
+                pull(close)
+        supply <- (mktcap_df %>% filter(symbol==mktcap_symbol) %>% pull(supply))[1]
+        mktcap_history_df <- mktcap_history_df %>%
+            add_column("{mktcap_symbol}":=price*supply)
+    }
+}
+
+mktcap_history_df[mktcap_history_df == 0] <- NA # ignore mktcap = 0 for quantile
+quantiles <- mktcap_history_df %>%
+    dplyr::select(-time) %>%
+    t() %>% as_tibble(rownames="symbol") %>% column_to_rownames("symbol") %>%
+    sapply(quantile, probs=0.90, na.rm=TRUE)
+mktcap_history_df <- mktcap_history_df %>% add_column("q90"=quantiles)
+mktcap_history_df[is.na(mktcap_history_df)] <- 0.0
+```
+
+Die Daten werden nach den im vorigen Abschnitt spezifizierten Kriterien gefiltert. Für die gefilterten Daten wird im Anschluss je Asset ein Granger Test durchgeführt.
+
+```{r, warning=FALSE, cache=TRUE, eval=TRUE}
+file_names_price <- dir(path="data/price_histories", pattern="\\.csv$")
+file_names_price <- file_names_price[-which(file_names_price == "symbols_skipped_price.csv")]
+assets_no_peak <- list()
+assets_ts_l50 <- list()
+assets_mktcap_90 <- list()
+assets_no_social <- list()
+
+# dataframe for test results
+result_df <- tibble(
+    symbol = character(),
+    startDate = as.Date(character()),
+    endDate = as.Date(character()),
+    p = numeric(),
+    F = numeric(),
+    revP = numeric(),
+    revF = numeric(),
+    mktcapPreBr = numeric(),
+    mktcapPostBr = numeric(),
+    priceMin = numeric(),
+    priceMax = numeric()
+)
+
+for (name in file_names_price[1:length(file_names_price)]) { 
+    symbol <- name %>% substr(1, nchar(name)-4)
+    
+    # load cleaned asset price
+    price_df <- as_tibble(read.csv(file=sprintf("data/price_histories/%s.csv", symbol))) %>%
+        mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
+        mutate(close=ifelse(relative_delta(.$close) >= 10, runmed(close, 49), close)) %>%
+        mutate(open=ifelse(relative_delta(.$open) >= 10, runmed(open, 49), open)) %>%
+        mutate(high=ifelse(relative_delta(.$high) >= 10, runmed(high, 49), high)) %>%
+        mutate(low=ifelse(relative_delta(.$low) >= 10, runmed(low, 49), low)) %>%
+        filter(open > 0 | close > 0 | high > 0 | low > 0)
+
+    # search for price breakouts
+    breakout_times <- if(nrow(price_df) == 0) list() else price_df %>%
+        filter(relative_delta(close) >= 2.0) %>% pull(time)
+    if (length(breakout_times) > 0) {
+        first_breakout <- breakout_times[1]
+        date_start <- head(price_df,1)$time
+        date_end <- min(tail(price_df,1)$time, first_breakout-28)
+
+        # indicators require ts length >50
+        if (date_end-date_start > 50) {
+            # read mktcap info for first breakout
+            pre_breakout_mktcap <- mktcap_history_df %>% filter(time == max(
+                date_start, first_breakout-21))
+            has_mktcap_data <- symbol %in% names(pre_breakout_mktcap)
+            pre_breakout_mktcap_symbol <- ifelse(has_mktcap_data,
+                pre_breakout_mktcap[,symbol][1,], 0.0) %>% unlist
+            if (pre_breakout_mktcap_symbol <= pre_breakout_mktcap$q90) {
+                # select timespan until breakout + padding
+                pre_breakout_price_history <- price_df %>% filter(time <= date_end)
+                
+                # check if social data is available
+                if (file.exists(sprintf("data/social_stats/%s.csv", symbol))) {
+                    pre_breakout_social_stats <- as_tibble(
+                            read.csv(file=sprintf("data/social_stats/%s.csv", symbol))) %>%
+                        mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
+                        mutate(total_page_views=total_page_views-lag(total_page_views)) %>%
+                        dplyr::select(time,
+                                    reddit_comments_per_day,
+                                    reddit_posts_per_day,
+                                    total_page_views) %>%
+                        filter((reddit_comments_per_day > 0 
+                                | reddit_posts_per_day > 0
+                                | total_page_views > 0)
+                                & time <= date_end)
+                    if (nrow(pre_breakout_social_stats) > 0) {
+                        # merge datasets to match in length
+                        test_df <- pre_breakout_price_history %>%
+                            full_join(pre_breakout_social_stats, by="time")
+                        test_df <- test_df %>%
+                            map_if(is.numeric, ~ifelse(is.na(.x), 0, .x)) %>%
+                            as_tibble
+                        
+                        # run granger test
+                        test <- granger_test_full(
+                            pull(test_df, total_page_views),
+                            pull(test_df, close))
+                        
+                        # save results
+                        post_breakout_mktcap <- mktcap_history_df %>% filter(time == date_end)
+                        post_breakout_mktcap_symbol <- ifelse(has_mktcap_data,
+                            post_breakout_mktcap[,symbol], 0.0) %>% unlist
+                        
+                        result_df <- result_df %>% add_row(symbol=symbol,
+                            startDate=date_start,
+                            endDate=date_end,
+                            p=test$main$`Pr(>F)`[2],
+                            F=test$main$F[2],
+                            revP=test$reverse$`Pr(>F)`[2],
+                            revF=test$reverse$F[2],
+                            mktcapPreBr=pre_breakout_mktcap_symbol,
+                            mktcapPostBr=post_breakout_mktcap_symbol,
+                            priceMin=min(pre_breakout_price_history$close),
+                            priceMax=max(pre_breakout_price_history$close))
+                    } else {
+                        assets_no_social <- assets_no_social %>% append(list(symbol))
+                    }
+                } else {
+                    assets_no_social <- assets_no_social %>% append(list(symbol))
+                }
+            } else {
+                assets_mktcap_90 <- assets_mktcap_90 %>% append(list(symbol))
+            }
+        } else {
+            assets_ts_l50 <- assets_ts_l50 %>% append(list(symbol))
+        }
+    } else {
+        assets_no_peak <- assets_no_peak %>% append(list(symbol))
+    }
+}
+
+print(unlist(assets_no_peak))
+print(unlist(assets_mktcap_90))
+print(unlist(assets_no_social))
+
+result_df
+```
+
+```{r, warning=FALSE, eval=TRUE}
+plot_granger <- result_df %>% 
+    arrange(p) %>% 
+    ggplot() +
+    geom_point(aes(x=1:nrow(result_df), y=p), color="black") +
+    geom_point(aes(x=1:nrow(result_df), y=revP, color=p<revP)) +
+    geom_linerange(aes(x=1:nrow(result_df), ymin=p, ymax=revP, color=p<revP)) +
+    theme(axis.ticks.x = element_blank(),
+          axis.text.x = element_blank())
+
+plot_granger_cum <- result_df %>% ggplot() +
+    geom_boxplot(aes(x=rep("Granger", nrow(result_df)), y=p)) +
+    geom_boxplot(aes(x=rep("Reverse Granger", nrow(result_df)), y=revP))
+
+grid.arrange(plot_granger, plot_granger_cum, nrow=2)
+```
+
+### Kontrollexperiment
+
+Als Kontrollexperiment erstellen wir nun die gleiche Statistik für die Assets, die aufgrund einer zu hohen Marktkapitalisierung aussortiert wurden.
+
+## Ergebnis
+
+- Granger-Causality test verwendet linearen prädiktor...
+- 
+
+### Datensatz Bias
+
+
+### Ergebnis
+
+
+## Literatur

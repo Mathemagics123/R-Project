@@ -8,6 +8,15 @@
 
 Phase 1 usually lasts a maximum of 2-3 weeks and during that time slowly fades into phase 2. The stealth phase can last from weeks to years and may not end in a price explosion. Phase 3 often features a phasic meteoric price increase, catalyzed by currently high levels of *FOMO*, over a one- to three-month period.
 
+# Breakout Detection
+
+For this exploration we will work with the assumption that the aforementioned *Breakout Phase* can only occur once in every tokens lifetime.
+
+Classification steps:
+
+1. Estimate historic market capitalization using current market capitalization and remove coins whose market capitalization never crosses threshold $C_{min}$.
+2. Measure movements as squared error between price and 50 day moving average
+
 # Current Market Sentiment
 
 <!-- *Coinmarketcap.com* adds roughly 10 new crypto-tokens every day, price blowups are expected by the public and fear of missing out is currently the main driver behind decision making. -->
