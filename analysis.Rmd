@@ -17,13 +17,13 @@ library(lmtest)
 library(dynlm)
 ```
 
-## Motivation
+## Einleitung
 
 Die Korrelation zwischen Social-Media Aktivität und Aktienpreisen wurde bereits in einer vielzahl von Forschungsarbeiten untersucht, wobei wiederholt die Schlussfolgerung erreicht wird, dass Nennungen alleine kein zuverlässiger Indikator für signifikante positive Preisbewegungen sind. Grund dafür sind die beidseitige Wechselwirkung zwischen Social-Media Aktivität und Asset-Preis sowie das Vermischen positiver und negativer Sentimente in den Beiträgen. Vereinfacht gesagt, die Social-Media Daten beinhalten zu viele Störsignale und müssen zunächst aufwendig gefiltert werden um jeglichen Nutzen für die Preisvorhersage zu liefern.
 
 Diese Exploration wurde Motiviert durch die Hypothese, dass die Aktivität in sozialen Netzwerken bezüglich Assets von *geringer* popularität bedeutend weniger Störsignale enthält und daher, potenziell bereits in roher Form, einen besseren Indikator für Preisbewegungen liefert.
 
-## Datenaufbereitung
+## Datenanalyse
 
 Im Folgenden wird 
 
@@ -282,10 +282,10 @@ Als Gegenprobe führen wir im Anschluss einen umgekehrten Granger-Causality Test
 
 ```{r}
 granger_test <- function(x, y, order) {
-    x=ts(x)
-    y=ts(y)
-    m1 = dynlm(y ~ L(y, 1:order) + L(x, 1:order))
-    m2 = dynlm(y ~ L(y, 1:order))
+    x <- ts(x)
+    y <- ts(y)
+    m1 <- dynlm(y ~ L(y, 1:order) + L(x, 1:order))
+    m2 <- dynlm(y ~ L(y, 1:order))
     return(result <-anova(m1, m2, test="F"))
 }
 
@@ -325,7 +325,7 @@ print_granger_test <- function(symbol, order=3) {
 ```
 
 ```{r, eval=TRUE}
-print_granger_test("1SG")
+print_granger_test("SHIB")
 print_granger_test(symbol) # SHIB
 print_granger_test("BTC")
 ```
@@ -389,7 +389,9 @@ result_df <- tibble(
     priceMax = numeric()
 )
 
-for (name in file_names_price[1:length(file_names_price)]) { 
+to_index <- 10#length(file_names_price)
+
+for (name in file_names_price[1:to_index]) {
     symbol <- name %>% substr(1, nchar(name)-4)
     
     # load cleaned asset price
@@ -511,13 +513,9 @@ Als Kontrollexperiment erstellen wir nun die gleiche Statistik für die Assets, 
 
 ## Ergebnis
 
-- Granger-Causality test verwendet linearen prädiktor...
-- 
+Der Granger Kausalitäts-Test belegt deutlich, dass eine Korrelation zwischen der Popularität eines Coins bei Reddit und seinem Trading-Volumen existiert. Da jedoch fast immer auch der Reverse Granger Kausalitäts-Test anschlägt konnte nicht festgestellt werden, ob die Popularität stärker auf das Handelsvolumen Einfluss nimmt als das Handelsvolumen auf die Popularität. Um tatsächlich sinnvoll als Grundlage für eine Investment-Strategie zu dienen müsste sichergestellt werden, dass ein plötzlicher Anstieg in der Popularität ausreichend verlässlich eine Preisexplosion mehrere Stunden im Vorraus vorhersagen kann. Denn anders als bei großen Mainstream Coins auf nutzerfreundlichen Apps ist der Erwerb von sehr unbekannten Coins meist ein sehr umständlicher Prozess.
 
-### Datensatz Bias
+## Bias
 
+Es ist definitiv ein ''Survivorship bias'' zu erwarten, da auch um auf den ausführlichsten Preistrackern wie CoinMarketCap gelistet zu werden, eine gewisse Popularität nötig ist. Obwohl wir also durch die Auswahl von über 4000 Coins den Effekt so gut es geht minimieren, fallen uns auf jeden Fall sehr kleine Währungen durchs Netz. Und vor allem die Datenerhebung der Reddit Popularität ist nicht fehlerfrei. Es werden die Anzahl der Kommentare und Posts gezählt, die den Coin-Namen als Keyword enthalten. Diese Methodik ist einfach, aber auch sehr anfällig gegen Spam und andere künstlichen Verfälschungen. Genauso hat die reine Keyword-Suche erhebliche Schwächen, in den rohen Daten ist die populärste Währung nicht wie zu erwarten ''Bitcoin'' sondern die kaum getradete Währung ''Crypto''.
 
-### Ergebnis
-
-
-## Literatur
