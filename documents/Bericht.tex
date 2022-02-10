@@ -51,11 +51,13 @@ Die entscheidene Frage ist jedoch, wie man drastische Kursänderungen bei völli
 
 Bei der Erhebung der Social Media Daten kam schnell das Problem auf, dass Reddits offizielle API auf 1000 Ergebnisse pro Suchanfrage limitiert ist. Jedoch existiert das inoffizielle ''Pushshift''-Archiv, das Suchen in einem präzisen Zeitrahmen ohne ein Limit für die Anzahl der Suchergebnisse ermöglicht. Aber auch da war mit einem Ratelimit von einer Anfrage pro Sekunde unsere geplante Auswertung von über 4000 Coins über einen Zeitraum von 4 Jahren nicht möglich. Also entschieden wir uns das komplette Pushshift-Archiv aller Kommentare auf Reddit herunterzuladen, dass in seinen 1.4 Terrabyte auf Academic Torrents (\url{https://academictorrents.com/details/90e7a746b1c24e45af0940b37cffcec7c96c8096}) als Peer-to-Peer-Download zur Verfügung steht. Wir beschränkten uns auf den Zeitraum vom 1. Januar 2017 bis zum 31. Dezember 2020 und ließen für jeden Tag die Anzahl der Erwähungen aller ausgewählten Cryptowährungen auswerten, was mehrere Tage Programmlaufzeit in Anspruch nahm. Um effizienter mit den Daten arbeiten zu können, sammelten wir die Erwähnungen in einer SQLite-Datenbank, bei dem der Schlüssel aus Datum und Coinname zusammengesetzt ist (bsp. ''2018-08-04-Bitcoin'').
 
-Die Erhebung der Preisdaten im selben Zeitraum
+\section*{Ergebnis}
 
+Der Granger Kausalitäts-Test belegt deutlich, dass eine Korrelation zwischen der Popularität eines Coins bei Reddit und seinem Trading-Volumen existiert. Da jedoch fast immer auch der Reverse Granger Kausalitäts-Test anschlägt konnte nicht festgestellt werden, ob die Popularität stärker auf das Handelsvolumen Einfluss nimmt als das Handelsvolumen auf die Popularität. Um tatsächlich sinnvoll als Grundlage für eine Investment-Strategie zu dienen müsste sichergestellt werden, dass ein plötzlicher Anstieg in der Popularität ausreichend verlässlich eine Preisexplosion mehrere Stunden im Vorraus vorhersagen kann. Denn anders als bei großen Mainstream Coins auf nutzerfreundlichen Apps ist der Erwerb von sehr unbekannten Coins meist ein sehr umständlicher Prozess.
 
+\section*{Bias}
 
-
+Es ist definitiv ein ''Survivorship bias'' zu erwarten, da auch um auf den ausführlichsten Preistrackern wie CoinMarketCap gelistet zu werden, eine gewisse Popularität nötig ist. Obwohl wir also durch die Auswahl von über 4000 Coins den Effekt so gut es geht minimieren, fallen uns auf jeden Fall sehr kleine Währungen durchs Netz. Und vor allem die Datenerhebung der Reddit Popularität ist nicht fehlerfrei. Es werden die Anzahl der Kommentare und Posts gezählt, die den Coin-Namen als Keyword enthalten. Diese Methodik ist einfach, aber auch sehr anfällig gegen Spam und andere künstlichen Verfälschungen. Genauso hat die reine Keyword-Suche erhebliche Schwächen, in den rohen Daten ist die populärste Währung nicht wie zu erwarten ''Bitcoin'' sondern die kaum getradete Währung ''Crypto''.
 
 
 
