@@ -19,9 +19,11 @@ library(dynlm)
 
 ## Einleitung
 
-Die Korrelation zwischen Social-Media Aktivität und Aktienpreisen wurde bereits in einer vielzahl von Forschungsarbeiten untersucht, wobei wiederholt die Schlussfolgerung erreicht wird, dass Nennungen alleine kein zuverlässiger Indikator für signifikante positive Preisbewegungen sind. Grund dafür sind die beidseitige Wechselwirkung zwischen Social-Media Aktivität und Asset-Preis sowie das Vermischen positiver und negativer Sentimente in den Beiträgen. Vereinfacht gesagt, die Social-Media Daten beinhalten zu viele Störsignale und müssen zunächst aufwendig gefiltert werden um jeglichen Nutzen für die Preisvorhersage zu liefern.
+Im November des vergangenen Jahres kündigt der Börsengigant "S&P Dow Jones Indices" den "S&P 500 Twitter Sentiment Index" an. Dabei handelt es sich um einen Aktienindex, der Wertpapiere nach ihrer aktuellen Popularität auf Twitter bewertet. Und es ist längst nicht der einzige Fall, in dem alteingessene Finanzmarkt-Akteure Interesse an Social Media Daten für Kursvorhersagen demonstrieren. Spätestens nach den Geschenissen um "Game Stop" im Januar 2021 wurde deutlich, welche Macht Kleininvestoren im Zeitalter der globalen Vernetzung entfalten können, wenn sie sich nur koordinieren.
 
-Diese Exploration wurde Motiviert durch die Hypothese, dass die Aktivität in sozialen Netzwerken bezüglich Assets von *geringer* popularität bedeutend weniger Störsignale enthält und daher, potenziell bereits in roher Form, einen besseren Indikator für Preisbewegungen liefert.
+Im hochvolatilen Crypto-Markt ist der Effekt noch ausgeprägter, im Kurs von "Dogecoin" hinterlässt jeder Tweet von Elon Musk deutliche Spuren. Wenn ein Coin große Popularität erreicht, ist aber eigentlich schon die größte Chance für Investoren vorbei. Am 8. April 2021 lag der "Dogecoin" Kurs bei 5 Cent, genau einen Monat später bei 52 Cent. Mit dieser mehr als 10-Fachung schaffte der Coin es bekanntlich sogar in die internationale Presse. Aber ist man stattdessen drei Monate früher eingestiegen, als am 6. Januar der Kurs noch bei 0.0085€ lag, hätte man sein Geld versechzigfachen können, wenn man schon anfang 2017 beim Preis von 0.000196€ eingestiegen wäre, hätte man sein Geld um den Faktor 2600 gesteigert. Das große Geld mit Cryptowährungen macht man also als ganz früher Einsteiger, lange bevor eine Währung populär ist und das Volumen so groß ist dass Preissteigerungen um 3 Größenordnungen ökonomisch unrealistisch sind.
+
+Die entscheidene Frage ist jedoch, wie man drastische Kursänderungen bei völlig obskuren Coins vorhersagen kann. In unserer Ausarbeitung soll es darum gehen, ob Erwähnungen auf der Plattform Reddit ein brauchbarer Indikator sind.
 
 ## Datenanalyse
 
@@ -145,7 +147,7 @@ grid.arrange(plot_q, plot_d, ncol=2)
 
 Die Normalverteilung approximiert die Verteilung von `log1p(mktcap)` nur grob (hier mit Erwartungswert `r norm_fit$estimate["mean"]` und Standardabweichung `r norm_fit$estimate["sd"]`) und wird daher nicht zur Extrapolation herangezogen.
 
-Für die Analyse werden alle Assets aussortiert, deren Marktkapitalisierung unmittelbar vor dem Zeitpunkt des *breakouts* nicht innerhalb des linksseitigen 90%-Quantils lag. Assets deren Marktkapitaldaten nicht im Datensatz enthalten ist, werden auch hinzugefügt, da bei diesem Datensatz tendeziell die größten Assets am vollständigsten enthalten sind. 
+Für die Analyse werden alle Assets aussortiert, deren Marktkapitalisierung unmittelbar vor dem Zeitpunkt des *breakouts* nicht innerhalb des linksseitigen 80%-Quantils lag (Auf Basis der Pareto-Verteilung, siehe [1]). Assets deren Marktkapitaldaten nicht im Datensatz enthalten ist, werden auch hinzugefügt, da bei diesem Datensatz tendeziell die größten Assets am vollständigsten enthalten sind. 
 
 **Krierium**: `mktcap_prob() ?? 0.0 < 0.9`
 
@@ -518,4 +520,8 @@ Der Granger Kausalitäts-Test belegt deutlich, dass eine Korrelation zwischen de
 ## Bias
 
 Es ist definitiv ein ''Survivorship bias'' zu erwarten, da auch um auf den ausführlichsten Preistrackern wie CoinMarketCap gelistet zu werden, eine gewisse Popularität nötig ist. Obwohl wir also durch die Auswahl von über 4000 Coins den Effekt so gut es geht minimieren, fallen uns auf jeden Fall sehr kleine Währungen durchs Netz. Und vor allem die Datenerhebung der Reddit Popularität ist nicht fehlerfrei. Es werden die Anzahl der Kommentare und Posts gezählt, die den Coin-Namen als Keyword enthalten. Diese Methodik ist einfach, aber auch sehr anfällig gegen Spam und andere künstlichen Verfälschungen. Genauso hat die reine Keyword-Suche erhebliche Schwächen, in den rohen Daten ist die populärste Währung nicht wie zu erwarten ''Bitcoin'' sondern die kaum getradete Währung ''Crypto''.
+
+## Literatur
+
+[1] Christian Kleiber & Samuel Kotz (2003). Statistical Size Distributions in Economics and Actuarial Sciences. Wiley. ISBN 978-0-471-15064-0.
 
