@@ -55,8 +55,6 @@ price_df <- as_tibble(read.csv(file=sprintf("data/price_histories/%s.csv", symbo
 price_df %>%
     ggplot(aes(x=time, y=close)) +
     geom_candlestick(aes(open=open, high=high, low=low, close=close)) +
-    geom_ma(ma_fun = SMA, n = 50, color = "black", size = 1) +
-    geom_smooth(se=FALSE) +
     labs(title=symbol, x="Time", y="Price (USD)")
 ```
 
@@ -239,7 +237,7 @@ grid.arrange(plot_q, plot_d, ncol=2)
 Interessanterweise wird `log1p(mktcap)` grob von einer Normalverteilung approximiert (hier mit Erwartungswert `r norm_fit$estimate["mean"]` und Standardabweichung `r norm_fit$estimate["sd"]`). Inspektion mit einem Tail-Fitter liefert:
 
 ```{r, message=FALSE, warning=FALSE}
-model_pl <- conlnorm$new(mktcap_df %>% arrange(desc(mktcap)) %>% pull(mktcap))
+model_pl <- conlnorm$new(mktcap_df %>% pull(mktcap))
 est_xmin <- estimate_xmin(model_pl)
 model_pl$setXmin(est_xmin)
 plot(model_pl)
@@ -348,18 +346,36 @@ Leider fällt aber auf, dass vor allem bei kleineren Cryptowährungen die Reddit
 
 # Methoden
 
-<!-- Describe Granger-Test -->
+## Granger Kausalität
+
+Um zu entscheiden, ob die hier vorliegenden Social-Media Daten ein angemessener Prädiktor für den Preis des zugehörigen Tokens sind ($X \implies Y$), führen wir einen *Granger Causality* Hypothesentest zum Signifikanzniveau $\alpha = 0.05$ durch.
+
+Bei einem Grangertest für zwei Variablen $Y\sim X$ werden standardmäßig zwei lineare Regressionsmodelle betrachtet:
+
+$$\text{Model 1:}\quad \hat y_t = \gamma_1 + \sum_{i=1}^{n} \alpha_{1,i} y_{t-i} + \sum_{i=1}^{n} \beta_i x_{t-i} + \varepsilon_{x,t}$$
+$$\text{Model 2:}\quad \tilde y_t = \gamma_2 + \sum_{i=1}^{n} \alpha_{2,i} y_{t-i} + \varepsilon_{x,t}$$
+
+Es soll überprüft werden, ob $\text{Model 1}$ $y_t$ besser vorhersagt als $\text{Model 2}$. In einem Test werden also die folgenden Hypothesen geprüft:
+
+$$H_0: (\beta_1, ..., \beta_n) = 0 = \beta_0, \quad \text{(Assetpreis nicht von Social-Media Daten Granger-verursacht)}$$
+
+gegen
+
+$$H_1: \beta_1 \neq 0 \lor ... \lor \beta_n \neq 0, \quad\text{(Social-Media Daten Granger-verursachen Assetpreis)}$$
+
+Um diese Hypothesen zu überprüfen wird bei einem Grangertest in der Regel ein Speizialfall des sogenannter Wald-Tests[3] durchgeführt, nämlich ein globaler $F$-Test[4]. Dieser trifft eine Aussage darüber, ob mindestens eine Variable eines linearen Regressionsmodells eine signifikante Bedeutung für das Modell hat. Für $\beta = (\beta_1, ..., \beta_n)$, $\tilde y = (\tilde y_1, ..., \tilde y_n)$ und $\hat y = (\hat y_1, ..., \hat y_n)$ die von Modell 2 und 1 generierten Vorhersagen, $l$ die Anzahl der $(y_i, x_i)$ paare im Datensatz und $R^2$ das Bestimmtheitsmaß hat dieser die Teststatistik:
+
+$$T = = \frac{\frac{\text{RSS}_1 - \text{RSS}_2}{p_1-p_2}}{\frac{\text{RSS}_2}{l-p_2}} = \frac{\sum_{i=1}^{n} (y_i - \hat y_i)^2 - \sum_{i=1}^{n} (y_i - \tilde y_i)^2}{\sum_{i=1}^{n} (y_i - \tilde y_i)^2} \frac{l-n}{n} \sim \text{F}_{n,l-n} \quad\text{bed. }H_0\text{ gilt}$$
+
+<!-- \frac{\sum_{i=1}^{n} (\hat y_i - \overline{\hat y})^2}{\sum_{i=1}^{n} (y_i - \tilde y_i)^2} \frac{l-n}{n} -->
+
+Liegt der $p$-Wert unterhalb des vorgegebenen Singnifikanzniveaus, so wird die Nullhypothese abgelehnt. Andernfalls wird die Alternativhypothese verworfen.
+
+Um zu verhindern, dass die beobachteten Ergebnisse das Resultat einer beidseitigen Wechselwirkung sind wird im Anschluss ein umgekehrter Granger-Causality Test für $Y\implies X$ durchgeführt. Nur falls hier der $p$-Wert hinreichend groß ist, sodass die Hypothese, $Y$ sei ein Prädiktor für $X$, abgelehnt wird, wird der Test als erfolgreich gewertet.
 
 # Test
 
-## Granger Kausalität
-
-Um zu entscheiden, ob die hier vorliegenden Social-Media Daten ein angemessener Prädiktor für den Preis des zugehörigen Tokens sind führen wir einen *Granger Causality* Hypothesentest mit folgenden Hypothesen durch:
-
-$$H_0: \text{Der Assetpreis wird nicht von den zugehörigen Social-Media Daten Granger-verursacht}$$
-$$H_1: \text{Social-Media Daten Granger-verursachen den zugehörigen Assetpreis}$$
-
-Als Gegenprobe führen wir im Anschluss einen umgekehrten Granger-Causality Test durch um festzustellen, ob potenziell eine rückseitige Wechselwirkung zwischen Social-Media Daten und Preis vorliegt.
+Im Folgenden sehen wir ein paar Beispiele für Granger-Tests.
 
 ```{r}
 granger_test <- function(x, y, order) {
@@ -418,7 +434,7 @@ Hier können mehrere Beobachtungen gemacht werden:
 
 ## Auswertung
 
-Datensatz mit historischer Marktkapitalisierung
+Datensatz mit historischer Marktkapitalisierung.
 
 ```{r, warning=FALSE, cache=TRUE, eval=TRUE}
 mktcap_history_df <- as_tibble(read.csv(file="data/price_histories/BTC.csv")) %>%
@@ -460,6 +476,7 @@ result_df <- tibble(
     symbol = character(),
     startDate = as.Date(character()),
     endDate = as.Date(character()),
+    length = numeric(),
     p = numeric(),
     F = numeric(),
     revP = numeric(),
@@ -539,6 +556,7 @@ for (name in file_names_price[1:to_index]) {
                         result_df <- result_df %>% add_row(symbol=symbol,
                             startDate=date_start,
                             endDate=date_end,
+                            length=as.numeric(date_end - date_start),
                             p=test$main$`Pr(>F)`[2],
                             F=test$main$F[2],
                             revP=test$reverse$`Pr(>F)`[2],
@@ -571,7 +589,7 @@ print(unlist(assets_no_social))
 result_df
 ```
 
-```{r, warning=FALSE, eval=TRUE}
+```{r, fig.height=8, warning=FALSE, eval=TRUE}
 plot_granger <- result_df %>% 
     arrange(p) %>% 
     ggplot() +
@@ -585,7 +603,7 @@ plot_granger_cum <- result_df %>% ggplot() +
     geom_boxplot(aes(x=rep("Granger", nrow(result_df)), y=p)) +
     geom_boxplot(aes(x=rep("Reverse Granger", nrow(result_df)), y=revP))
 
-grid.arrange(plot_granger, plot_granger_cum, nrow=2)
+grid.arrange(plot_granger, plot_granger_cum, nrow=2, heights=c(1,2))
 ```
 
 ```{r}
@@ -608,3 +626,7 @@ Es ist definitiv ein ''Survivorship bias'' zu erwarten, da auch um auf den ausf�
 [1] Bing Li, Keith C.C. Chan, Carol Ou, Sun Ruifeng (2017). Discovering public sentiment in social media for predicting stock movement of publicly listed companies, Social Science Computer Review, https://doi.org/10.1177%2F0894439312448037.
 
 [2] https://michaeltauberg.medium.com/power-law-in-popular-media-7d7efef3fb7c
+
+[3] https://clas.ucdenver.edu/marcelo-perraillon/sites/default/files/attached-files/week_4_slr_ii_0.pdf
+
+[4] https://de.wikipedia.org/wiki/Globaler_F-Test
