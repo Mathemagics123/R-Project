@@ -5,39 +5,47 @@ output:
         toc: true
 ---
 
-## Dependencies
+# Dependencies
 
 ```{r, message=FALSE}
 library(tidyverse)
 library(tidyquant)
 library(MASS)
 library(gridExtra)
-library(jsonlite)
+library(poweRlaw)
 library(lmtest)
 library(dynlm)
 ```
 
-## Einleitung
+# Einleitung
 
-Die Korrelation zwischen Social-Media Aktivität und Aktienpreisen wurde bereits in einer vielzahl von Forschungsarbeiten untersucht, wobei wiederholt die Schlussfolgerung erreicht wird, dass Nennungen alleine kein zuverlässiger Indikator für signifikante positive Preisbewegungen sind. Grund dafür sind die beidseitige Wechselwirkung zwischen Social-Media Aktivität und Asset-Preis sowie das Vermischen positiver und negativer Sentimente in den Beiträgen. Vereinfacht gesagt, die Social-Media Daten beinhalten zu viele Störsignale und müssen zunächst aufwendig gefiltert werden um jeglichen Nutzen für die Preisvorhersage zu liefern.
+Im November des vergangenen Jahres kündigt der Börsengigant "S&P Dow Jones Indices" den "S&P 500 Twitter Sentiment Index" an. Dabei handelt es sich um einen Aktienindex, der Wertpapiere nach ihrer aktuellen Popularität auf Twitter bewertet. Und es ist längst nicht der einzige Fall, in dem alteingessene Finanzmarkt-Akteure Interesse an Social Media Daten für Kursvorhersagen demonstrieren. Spätestens nach den Geschenissen um "Game Stop" im Januar 2021 wurde deutlich, welche Macht Kleininvestoren im Zeitalter der globalen Vernetzung entfalten können, wenn sie sich nur koordinieren.
+
+Im hochvolatilen Crypto-Markt ist der Effekt noch ausgeprägter, im Kurs von "Dogecoin" hinterlässt jeder Tweet von Elon Musk deutliche Spuren. Wenn ein Coin große Popularität erreicht, ist aber eigentlich schon die größte Chance für Investoren vorbei. Am 8. April 2021 lag der "Dogecoin" Kurs bei 5 Cent, genau einen Monat später bei 52 Cent. Mit dieser mehr als 10-Fachung schaffte der Coin es bekanntlich sogar in die internationale Presse. Aber ist man stattdessen drei Monate früher eingestiegen, als am 6. Januar der Kurs noch bei 0.0085€ lag, hätte man sein Geld versechzigfachen können, wenn man schon anfang 2017 beim Preis von 0.000196€ eingestiegen wäre, hätte man sein Geld um den Faktor 2600 gesteigert. Das große Geld mit Cryptowährungen macht man also als ganz früher Einsteiger, lange bevor eine Währung populär ist und das Volumen so groß ist dass Preissteigerungen um 3 Größenordnungen ökonomisch unrealistisch sind.
+
+Die Korrelation zwischen Social-Media Aktivität und Aktienpreisen wurde bereits in einer Vielzahl von Forschungsarbeiten untersucht [1], wobei wiederholt die Schlussfolgerung erreicht wird, dass Nennungen alleine kein zuverlässiger Indikator für signifikante positive Preisbewegungen sind. Grund dafür sind die beidseitige Wechselwirkung zwischen Social-Media Aktivität und Asset-Preis sowie das Vermischen positiver und negativer Sentimente in den Beiträgen. Vereinfacht gesagt, die Social-Media Daten beinhalten zu viele Störsignale und müssen zunächst aufwendig gefiltert werden um jeglichen Nutzen für die Preisvorhersage zu liefern.
 
 Diese Exploration wurde Motiviert durch die Hypothese, dass die Aktivität in sozialen Netzwerken bezüglich Assets von *geringer* popularität bedeutend weniger Störsignale enthält und daher, potenziell bereits in roher Form, einen besseren Indikator für Preisbewegungen liefert.
 
-## Datenanalyse
+# Explorative Analyse
 
-Im Folgenden wird 
+## Datensatz
 
-Der einfachheit halber wird angenommen, dass ein Token nur einmal *prominent* werden kann. Daher wird je Asset maximal ein Zeitpunk gesetzt, wo der erste *breakout* angenommen wird.
+Bei der Erhebung der Social Media Daten kam schnell das Problem auf, dass Reddits offizielle API auf 1000 Ergebnisse pro Suchanfrage limitiert ist. Jedoch existiert das inoffizielle ''Pushshift''-Archiv, das Suchen in einem präzisen Zeitrahmen ohne ein Limit für die Anzahl der Suchergebnisse ermöglicht. Aber auch da war mit einem Ratelimit von einer Anfrage pro Sekunde unsere geplante Auswertung von über 4000 Coins über einen Zeitraum von 4 Jahren nicht möglich. Also entschieden wir uns das komplette Pushshift-Archiv aller Kommentare auf Reddit herunterzuladen, dass in seinen 1.4 Terrabyte auf Academic Torrents (https://academictorrents.com/details/90e7a746b1c24e45af0940b37cffcec7c96c8096) als Peer-to-Peer-Download zur Verfügung steht. Wir beschränkten uns auf den Zeitraum vom 1. Januar 2017 bis zum 31. Dezember 2020 und ließen für jeden Tag die Anzahl der Erwähungen aller ausgewählten Cryptowährungen auswerten, was mehrere Tage Programmlaufzeit in Anspruch nahm. Um effizienter mit den Daten arbeiten zu können, sammelten wir die Erwähnungen in einer SQLite-Datenbank, bei dem der Schlüssel aus Datum und Coinname zusammengesetzt ist (bsp. ''2018-08-04-Bitcoin'').
 
-Zur Klassifizierung werden hier die Faktoren: Preis, Marktkapitalisierung, und Popularität berücksichtigt. Die Klassifikationskriterien werden im Folgenden anhand  des Beispiels *Shiba Inu* illustiert:
+Als zweite Datenquelle haben wir die API von Cryptocompare genutzt. Dort haben wir den täglichen Kurs aller Cryptowährungen über die vier Jahre gesammelt und in einzelnen CSV-Dateien abgespeichert. Zusätzlich haben wir noch deren Social Media Statistiken gespeichert, unter anderem "reddit-mentions", "twitter-likes" und Aufrufzahlen auf Cryptocompare. Somit besteht der Datensatz aus 3 Teilen. Die Einzelheiten der jeweiligen Datensätze werden im Folgenden kurz anhand des Beispiels *Shiba Inu* illustiert:
 
 ```{r}
 symbol <- "SHIB"
 ```
 
-### Preis
+**Preis Historien** (*data/price_histories/*)
 
-Von Bedeutung sind signifikante positive Preisbewegungen innerhalb kurzer Zeit. Als Indikator wird daher die Differenz zwischen Preis und einem 50-Tägigen laufenden Mittel (SMA50) betrachtet.
+Diese Liste an `*.csv` Dateien enthält preisbezogene Daten für `r length(dir(path="data/price_histories", pattern="\\.csv$")) - 1` Cryptowährungen über den Zeitraum vom 01.01.2017 bis zum 31.12.2021. Dabei werden pro Tag die folgenden Datenpunkte erfasst:
+
+- `open`, `high`, `low`, `close`, welche den ersten, höchsten, tiefsten und letzten Preis des jeweiligen Tages in USD angeben
+- `volumeto`, `volumefrom`, welche das Käuf- und Verkaufvolumen in USD angeben
+- `conversionType`, `conversionSymbol`, die angeben falls der Preis von einer anderen Basiswährung bezogen und lediglich in USD umgerechnet wurde
 
 ```{r, fig.height=3, message=FALSE, warning=FALSE}
 price_df <- as_tibble(read.csv(file=sprintf("data/price_histories/%s.csv", symbol))) %>%
@@ -45,6 +53,92 @@ price_df <- as_tibble(read.csv(file=sprintf("data/price_histories/%s.csv", symbo
     filter(open > 0 | close > 0 | high > 0 | low > 0)
 
 price_df %>%
+    ggplot(aes(x=time, y=close)) +
+    geom_candlestick(aes(open=open, high=high, low=low, close=close)) +
+    geom_ma(ma_fun = SMA, n = 50, color = "black", size = 1) +
+    geom_smooth(se=FALSE) +
+    labs(title=symbol, x="Time", y="Price (USD)")
+```
+
+```{r, fig.height=2, message=FALSE, warning=FALSE}
+price_df %>%
+    ggplot(aes(x=time, y=volumeto)) +
+    geom_line() +
+    labs(title=symbol, x="Time", y="Volume (USD)")
+```
+
+**Marktkapitalisierungen** (*data/mktcap.csv*)
+
+Diese `*.csv` Datei enthält die Marktkapitalisierung (`mktcap`) für 5941 Cryptowährungen, bezogen am 28.01.2022. Außerdem enthalten sind die gesamtmenge an Tokens (`supply`), sowie die gesamtmenge im Umlauf (`circulatingSupply`).
+
+```{r}
+mktcap_df <- as_tibble(read.csv(file="data/mktcap.csv"))
+summary(mktcap_df %>% dplyr::select(-X, -conversionType, -conversionSymbol))
+```
+
+**Social-Media Statistiken** (*data/social_stats/*)
+
+Die `*.csv` Dateien im *social_stats* Ordner enthalten Social-Media Statistiken für `r length(dir(path="data/social_stats", pattern="\\.csv"))` Cryptoassets. Dabei wird je Asset eine vielzahl an Variablen geführt von denen wir uns hier auf `reddit_comments_per_day`, `reddit_posts_per_day`, und `total_page_views` beschänken.
+
+Wie die Namen bereits vermuten lassen geben die ersten beiden dieser Variablen die Anzahl der Reddit-Kommentare bzw. Posts pro Tag für eine bestimmte Cryptowährung. Die letze Variable gibt die Anzahl an Seitenaufrufen auf der Domain *www.cryptocompare.com* die in jeglichem Zusammenhang mit dem jeweiligen Cryptoasset stehen.
+
+```{r}
+plot_social <- function(symbol) {
+    social_df <- as_tibble(read.csv(file=sprintf("data/social_stats/%s.csv", symbol))) %>%
+        mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
+        mutate(total_page_views=total_page_views-lag(total_page_views)) %>%
+        dplyr::select(time, reddit_comments_per_day, reddit_posts_per_day, total_page_views) %>%
+        filter(reddit_comments_per_day > 0 | reddit_posts_per_day > 0 | total_page_views > 0)
+
+    plot_cc_social <- social_df %>%
+        ggplot(aes(x=time, y=total_page_views)) +
+        geom_line() +
+        labs(title=sprintf("%s: CryptoCompare Total Views", symbol),
+             x="Time",
+             y="#Views")
+
+    plot_reddit_post <- social_df %>%
+        ggplot(aes(x=time, y=reddit_posts_per_day)) +
+        geom_line(color="darkorange3") +
+        labs(title=sprintf("%s: Reddit Posts", symbol),
+             x="Time",
+             y="#Posts")
+
+    plot_reddit_comment <- social_df %>%
+        ggplot(aes(x=time, y=reddit_comments_per_day)) +
+        geom_line(color="orange") +
+        labs(title=sprintf("%s: Reddit Comments", symbol),
+             x="Time",
+             y="#Comments")
+    
+    grid.arrange(
+        plot_cc_social,
+        plot_reddit_post,
+        plot_reddit_comment,
+        nrow=3)
+}
+```
+
+```{r}
+plot_social(symbol)
+```
+
+
+## Filterkriterien
+
+Im Hinblick auf unsere Forschungsfrage interessieren uns nur bestimmte Abschnitte der uns vorliegenden Zeitserien; nämlich die Abschnitte bis kurz nachdem die jeweilige Cryptowährung ein *breakout* erlebt hat.
+
+Der Einfachheit halber wird angenommen, dass ein Token nur einmal *prominent* werden kann. Daher wird je Asset maximal ein Zeitpunk gesetzt, wo der erste *breakout* angenommen wird.
+
+Zur Klassifizierung werden hier die Faktoren: Preis, Marktkapitalisierung, und Popularität berücksichtigt. Die Klassifikationskriterien werden im Folgenden illustriert.
+
+### Preis
+
+Von Bedeutung sind signifikante positive Preisbewegungen innerhalb kurzer Zeit. Als Indikator wird daher die Differenz zwischen Preis und einem 50-Tägigen laufenden Mittel (SMA50) betrachtet.
+
+```{r, fig.height=6, message=FALSE, warning=FALSE}
+# price plot for reference
+plot_price <- price_df %>%
     ggplot(aes(x=time, y=close)) +
     geom_candlestick(aes(open=open, high=high, low=low, close=close)) +
     geom_ma(ma_fun = SMA, n = 50, color = "black", size = 1) +
@@ -72,7 +166,7 @@ relative_delta <- function(x, n=50) {
     return(unlist(relative_delta))
 }
 
-ggplot(data.frame(x=price_df$time, y=relative_delta(price_df$close))) +
+plot_relative_delta <- ggplot(data.frame(x=price_df$time, y=relative_delta(price_df$close))) +
     geom_area(mapping=aes(x=x, y=y, fill=(y > 0))) +
     geom_line(aes(x=x, y=y)) +
     geom_hline(yintercept=2, linetype='dotted') +
@@ -81,6 +175,8 @@ ggplot(data.frame(x=price_df$time, y=relative_delta(price_df$close))) +
     geom_hline(yintercept=-2, linetype='dotted') +
     guides(fill="none") +
     labs(title=sprintf("%s: Relative Delta", symbol), x="Time", y="y")
+
+grid.arrange(plot_price, plot_relative_delta, nrow=2, heights=c(3,3))
 ```
 
 ```{r, include=FALSE}
@@ -102,9 +198,6 @@ Es wird festgelegt, dass eine Preissteigerung von mehr als 200% bezüglich des D
 Da uns nur die aktuellen und keine historischen Daten für die Marktkapitalisierung der hier betrachteten Assets vorliegen wird die historische Marktkapitalisierung mithilfe der Preishistorie abgeschätzt, vorgemerkt, unter Vernachlässigung von quantitativem Easing/Tightening.
 
 ```{r, fig.height=3, message=FALSE, warning=FALSE}
-
-# plot approximated
-mktcap_df <- as_tibble(read.csv(file="data/mktcap.csv"))
 
 # cleanup
 mktcap_df <- mktcap_df %>%
@@ -143,53 +236,28 @@ plot_d <- mktcap_df %>%
 grid.arrange(plot_q, plot_d, ncol=2)
 ```
 
-Die Normalverteilung approximiert die Verteilung von `log1p(mktcap)` nur grob (hier mit Erwartungswert `r norm_fit$estimate["mean"]` und Standardabweichung `r norm_fit$estimate["sd"]`) und wird daher nicht zur Extrapolation herangezogen.
+Interessanterweise wird `log1p(mktcap)` grob von einer Normalverteilung approximiert (hier mit Erwartungswert `r norm_fit$estimate["mean"]` und Standardabweichung `r norm_fit$estimate["sd"]`). Inspektion mit einem Tail-Fitter liefert:
 
-Für die Analyse werden alle Assets aussortiert, deren Marktkapitalisierung unmittelbar vor dem Zeitpunkt des *breakouts* nicht innerhalb des linksseitigen 90%-Quantils lag. Assets deren Marktkapitaldaten nicht im Datensatz enthalten ist, werden auch hinzugefügt, da bei diesem Datensatz tendeziell die größten Assets am vollständigsten enthalten sind. 
+```{r, message=FALSE, warning=FALSE}
+model_pl <- conlnorm$new(mktcap_df %>% arrange(desc(mktcap)) %>% pull(mktcap))
+est_xmin <- estimate_xmin(model_pl)
+model_pl$setXmin(est_xmin)
+plot(model_pl)
+lines(model_pl, col=2)
+print(mktcap_df %>% filter(mktcap > est_xmin$xmin) %>% nrow / mktcap_df %>% nrow)
+```
+
+Das Modell erreicht immer noch einen *hinreichend guten Fit* (minimieren der Kolmogorow-Smirnow-Statistik) wenn nur die 3% der Assets mit der niedrigsten Marktkapitalisierung ausgeschlossen werden und ist damit eine sehr gute Approximation.
+
+Diese Beobachtung regt dazu an in der Popularität von Cryptowährungen eine ähnliche Verteilung wie besipielsweise eine Potenzverteilung zu vermuten. Erfahrungsgemäß folgt der Bekanntheitsgrad Angehöriger einer Kategorie einer Potenz-artigen Verteilung wobei ein kleiner Prozentteil nahezu die gesamte Popularität beansprucht. [2] Dies motiviert folgendes Filterkriterium:
+
+Für die Analyse werden alle Assets aussortiert, deren Marktkapitalisierung unmittelbar vor dem Zeitpunkt des *breakouts* nicht innerhalb des linksseitigen 90%-Quantils lag. Assets deren Marktkapitaldaten nicht im Datensatz enthalten sind, werden auch hinzugefügt, da bei diesem Datensatz tendeziell die größten Assets am vollständigsten enthalten sind.
 
 **Krierium**: `mktcap_prob() ?? 0.0 < 0.9`
 
 ### Popularität
 
 Die Popularität wird anhand der Reddit-Aktivität sowie der Anzahl zugehöriger Anfragen auf der Seite *www.cryptocompare.com* bemessen.
-
-```{r, fig.height=4, message=FALSE, warning=FALSE}
-
-plot_social <- function(symbol) {
-    social_df <- as_tibble(read.csv(file=sprintf("data/social_stats/%s.csv", symbol))) %>%
-        mutate(time=as.Date(as.POSIXct(time, origin="1970-01-01"))) %>%
-        mutate(total_page_views=total_page_views-lag(total_page_views)) %>%
-        dplyr::select(time, reddit_comments_per_day, reddit_posts_per_day, total_page_views) %>%
-        filter(reddit_comments_per_day > 0 | reddit_posts_per_day > 0 | total_page_views > 0)
-
-    plot_cc_social <- social_df %>%
-        ggplot(aes(x=time, y=total_page_views)) +
-        geom_line() +
-        labs(title=sprintf("%s: CryptoCompare Total Views", symbol),
-             x="Time",
-             y="#Views")
-
-    plot_reddit_post <- social_df %>%
-        ggplot(aes(x=time, y=reddit_posts_per_day)) +
-        geom_line(color="darkorange3") +
-        labs(title=sprintf("%s: Reddit Posts", symbol),
-             x="Time",
-             y="#Posts")
-
-    plot_reddit_comment <- social_df %>%
-        ggplot(aes(x=time, y=reddit_comments_per_day)) +
-        geom_line(color="orange") +
-        labs(title=sprintf("%s: Reddit Comments", symbol),
-             x="Time",
-             y="#Comments")
-    
-    grid.arrange(
-        plot_cc_social,
-        plot_reddit_post,
-        plot_reddit_comment,
-        nrow=3)
-}
-```
 
 Um zu beobachten, in welchen charakteristischen Merkmalen sich die hier betrachteten Daten für Tokens von unterschiedlicher popularität unterscheiden, vergleichen wir zunächst die Crypto-Tokens *Air* (unpopulär), *Shiba Inu* (mittel-populär) und *Bitcoin* (populär).
 
@@ -201,15 +269,15 @@ plot_social("BTC")
 
 Während die Social-Media Daten von BTC und SHIB sich in einer ähnlichen Größenordnung bewegen ist die Social-Media Aktivität von AIR 1-2 Größenordnungen kleiner.
 
-Wir stellen fest, dass diese Daten in roher Form kein absolutes Maß für die Popularität des jeweiligen Assets darstellen und daher wenn nur nach sorgfältiger Analyse eine zuverlässige Aussage über die absolute Popularität treffen. Dies ist vor allem Fehleranfällig. Da wir mit der Marktkapitalisierung bereits ein gutes Kriterium haben um bereits populäre Assets herauszufiltern werden wir davon absehen diese Daten als Filterkriterium für Breakouts zu verwenden.
+Wir stellen aber fest, dass diese Daten in roher Form kein absolutes Maß für die Popularität des jeweiligen Assets darstellen und daher wenn nur nach sorgfältiger Analyse eine zuverlässige Aussage über die absolute Popularität treffen. Dies ist vor allem Fehleranfällig. Da wir mit der Marktkapitalisierung bereits ein gutes Kriterium haben um bereits populäre Assets herauszufiltern werden wir davon absehen diese Daten als Filterkriterium für Breakouts zu verwenden.
 
-### Datensatz
+**Datensatz**
 
-Mithilfe der spezifizierten Filterkriterien wird nun ein Datensatz erstellt.
+Da Tidyverse Dataframes auf maximal 2 Dimensionen beschränkt sind wird der vollständige Datensatz nicht explizit erstellt. Statdessen werden die Daten am Ende des Reports, inkremental, Währung für Währung, aggregiert, gefilter und nach Durchführung der jeweiligen Tests wieder verworfen.
 
-## Analyse
+## Exploration
 
-### Exploration
+Nachdem die Kriterien zur Klassifizierung von *price-breakouts* festgelegt wurden vergleichen wir zunächst in einer Übersicht die unterschiedlichen Variablen von verschiedenen Tokens um die Plausibilität der Forschungsfrage zunächst einzuschätzen und gegebenenfalls noch weitere Zusammenhäge zu erkennen.
 
 ```{r, fig.height=7, message=FALSE, warning=TRUE}
 
@@ -262,18 +330,31 @@ plot_full_profile <- function(symbol) {
 }
 ```
 
-Wir plotten nun nochmal die drei Crypto Assets *Air*, *Shiba Inu* und *Bitcoin*, jetzt allerdings zusammen mit Preis- und Volumendaten:
+Im folgenden werden unter anderem erneut die Daten drei Cryptoassets *Air*, *Shiba Inu* und *Bitcoin* visualisiert, sowie *DOGE*, *MANA*, und *SAND*; jetzt allerdings zusammen mit Preis- und Volumendaten:
 
 ```{r, fig.height=7, message=FALSE, warning=FALSE, eval=TRUE}
+
 plot_full_profile("AIR")
+plot_full_profile("SAND")
+plot_full_profile("MANA")
 plot_full_profile(symbol) # SHIB
+plot_full_profile("DOGE")
 plot_full_profile("BTC")
 ```
 
+Wie erwartet lassen die Plots einen Zusammenhang zwischen den Social-Media- und Preis-Daten vermuten.
 
-### Granger Kausalität
+Leider fällt aber auf, dass vor allem bei kleineren Cryptowährungen die Reddit Daten nur sehr unvollständig und in der Regel erst ab einem recht späten Zeitpunkt vorhanden sind. Wenn vorhanden, scheinen diese allerdings relativ gut mit den Seitenaufrufen bei CryptoCompare zu korrelieren. Da diese auch einen hinreichend guten Indikator für die Popularität einer Währung liefern sollten und vor allem aber nahezu lückenlos vorhanden sind verwerfen wir die Reddit Daten und verwenden stattdessen die CryptoCompare Seitenaufrufe als Metrik für Social-Media Aktivität.
 
-Um zu entscheiden, ob die hier vorliegenden Social-Media Daten ein angemessener Prädiktor für den Preis des zugehörigen Tokens sind führen wir einen *Granger Causality* Hypothesentest durch mit folgenden Hypothesen:
+# Methoden
+
+<!-- Describe Granger-Test -->
+
+# Test
+
+## Granger Kausalität
+
+Um zu entscheiden, ob die hier vorliegenden Social-Media Daten ein angemessener Prädiktor für den Preis des zugehörigen Tokens sind führen wir einen *Granger Causality* Hypothesentest mit folgenden Hypothesen durch:
 
 $$H_0: \text{Der Assetpreis wird nicht von den zugehörigen Social-Media Daten Granger-verursacht}$$
 $$H_1: \text{Social-Media Daten Granger-verursachen den zugehörigen Assetpreis}$$
@@ -335,7 +416,7 @@ Hier können mehrere Beobachtungen gemacht werden:
 1. BTC, das populärste der 3 Assets, liefert einen p-Wert, weit über dem gesetzten Signifikanzniveau, sodass $H_1$ abgelehnt wird, also laut diesem Test keine Kausalität zwischen den Variablen besteht.
 2. Sowohl AIR, als auch SHIB haben einen p-Wert < $\alpha$. Demnach wird die Nullhypothese abgelehnt. Allerdings schlägt auch der reverse-Test an, was indikativ für eine beidseitige Wechselwirkung ist.
 
-### Big Data
+## Auswertung
 
 Datensatz mit historischer Marktkapitalisierung
 
@@ -389,7 +470,7 @@ result_df <- tibble(
     priceMax = numeric()
 )
 
-to_index <- 10#length(file_names_price)
+to_index <- 200#length(file_names_price)
 
 for (name in file_names_price[1:to_index]) {
     symbol <- name %>% substr(1, nchar(name)-4)
@@ -448,7 +529,7 @@ for (name in file_names_price[1:to_index]) {
                         # run granger test
                         test <- granger_test_full(
                             pull(test_df, total_page_views),
-                            pull(test_df, close))
+                            pull(test_df, volumeto))
                         
                         # save results
                         post_breakout_mktcap <- mktcap_history_df %>% filter(time == date_end)
@@ -507,9 +588,11 @@ plot_granger_cum <- result_df %>% ggplot() +
 grid.arrange(plot_granger, plot_granger_cum, nrow=2)
 ```
 
-### Kontrollexperiment
-
-Als Kontrollexperiment erstellen wir nun die gleiche Statistik für die Assets, die aufgrund einer zu hohen Marktkapitalisierung aussortiert wurden.
+```{r}
+a <- 0.05
+summary(result_df %>% filter(p < a, revP > a))
+summary(result_df %>% filter(p > a, revP < a))
+```
 
 ## Ergebnis
 
@@ -519,3 +602,9 @@ Der Granger Kausalitäts-Test belegt deutlich, dass eine Korrelation zwischen de
 
 Es ist definitiv ein ''Survivorship bias'' zu erwarten, da auch um auf den ausführlichsten Preistrackern wie CoinMarketCap gelistet zu werden, eine gewisse Popularität nötig ist. Obwohl wir also durch die Auswahl von über 4000 Coins den Effekt so gut es geht minimieren, fallen uns auf jeden Fall sehr kleine Währungen durchs Netz. Und vor allem die Datenerhebung der Reddit Popularität ist nicht fehlerfrei. Es werden die Anzahl der Kommentare und Posts gezählt, die den Coin-Namen als Keyword enthalten. Diese Methodik ist einfach, aber auch sehr anfällig gegen Spam und andere künstlichen Verfälschungen. Genauso hat die reine Keyword-Suche erhebliche Schwächen, in den rohen Daten ist die populärste Währung nicht wie zu erwarten ''Bitcoin'' sondern die kaum getradete Währung ''Crypto''.
 
+
+# Literatur
+
+[1] Bing Li, Keith C.C. Chan, Carol Ou, Sun Ruifeng (2017). Discovering public sentiment in social media for predicting stock movement of publicly listed companies, Social Science Computer Review, https://doi.org/10.1177%2F0894439312448037.
+
+[2] https://michaeltauberg.medium.com/power-law-in-popular-media-7d7efef3fb7c
