@@ -1,6 +1,6 @@
 # R-Project
 
-Analyze the correlation between asset prices and social media activity for crypto assets with low market capitalization.
+Statistical analysis for causal relationship between asset prices and social media activity for crypto assets with low market capitalization.
 
 # Datasets
 
