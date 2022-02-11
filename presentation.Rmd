@@ -472,6 +472,7 @@ result_df <- tibble(
     symbol = character(),
     startDate = as.Date(character()),
     endDate = as.Date(character()),
+    length = numeric(),
     p = numeric(),
     F = numeric(),
     revP = numeric(),
@@ -482,7 +483,7 @@ result_df <- tibble(
     priceMax = numeric()
 )
 
-to_index <- 200#length(file_names_price)
+to_index <- length(file_names_price)
 
 for (name in file_names_price[1:to_index]) {
     symbol <- name %>% substr(1, nchar(name)-4)
@@ -551,6 +552,7 @@ for (name in file_names_price[1:to_index]) {
                         result_df <- result_df %>% add_row(symbol=symbol,
                             startDate=date_start,
                             endDate=date_end,
+                            length=as.numeric(date_end - date_start),
                             p=test$main$`Pr(>F)`[2],
                             F=test$main$F[2],
                             revP=test$reverse$`Pr(>F)`[2],
