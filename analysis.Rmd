@@ -614,7 +614,7 @@ summary(result_df %>% filter(p > a, revP < a))
 
 ## Ergebnis
 
-Der Granger Kausalitäts-Test belegt deutlich, dass eine Korrelation zwischen der Popularität eines Coins bei Reddit und seinem Trading-Volumen existiert. Da jedoch fast immer auch der Reverse Granger Kausalitäts-Test anschlägt konnte nicht festgestellt werden, ob die Popularität stärker auf das Handelsvolumen Einfluss nimmt als das Handelsvolumen auf die Popularität. Um tatsächlich sinnvoll als Grundlage für eine Investment-Strategie zu dienen müsste sichergestellt werden, dass ein plötzlicher Anstieg in der Popularität ausreichend verlässlich eine Preisexplosion mehrere Stunden im Vorraus vorhersagen kann. Denn anders als bei großen Mainstream Coins auf nutzerfreundlichen Apps ist der Erwerb von sehr unbekannten Coins meist ein sehr umständlicher Prozess.
+Bei 79 Cryptowährungen schlägt nur der Foward Test an, bei 247 Währungen nur der Reverse Test. Da aber insgesamt über 1300 Crypto-Assets getestet wurden, kann keine klare Kausalität festgestellt werden. Um tatsächlich sinnvoll als Grundlage für eine Investment-Strategie zu dienen müsste außerdem sichergestellt werden, dass ein plötzlicher Anstieg in der Popularität ausreichend verlässlich eine Preisexplosion mehrere Stunden im Vorraus vorhersagen kann. Denn anders als bei großen Mainstream Coins auf nutzerfreundlichen Apps ist der Erwerb von sehr unbekannten Coins meist ein sehr umständlicher Prozess.
 
 ## Bias
 
