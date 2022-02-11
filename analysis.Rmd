@@ -365,7 +365,7 @@ $$H_1: \beta_1 \neq 0 \lor ... \lor \beta_n \neq 0, \quad\text{(Social-Media Dat
 
 Um diese Hypothesen zu überprüfen wird bei einem Grangertest in der Regel ein Speizialfall des sogenannter Wald-Tests[3] durchgeführt, nämlich ein globaler $F$-Test[4]. Dieser trifft eine Aussage darüber, ob mindestens eine Variable eines linearen Regressionsmodells eine signifikante Bedeutung für das Modell hat. Für $\beta = (\beta_1, ..., \beta_n)$, $\tilde y = (\tilde y_1, ..., \tilde y_n)$ und $\hat y = (\hat y_1, ..., \hat y_n)$ die von Modell 2 und 1 generierten Vorhersagen, $l$ die Anzahl der $(y_i, x_i)$ paare im Datensatz und $R^2$ das Bestimmtheitsmaß hat dieser die Teststatistik:
 
-$$T = = \frac{\frac{\text{RSS}_1 - \text{RSS}_2}{p_1-p_2}}{\frac{\text{RSS}_2}{l-p_2}} = \frac{\sum_{i=1}^{n} (y_i - \hat y_i)^2 - \sum_{i=1}^{n} (y_i - \tilde y_i)^2}{\sum_{i=1}^{n} (y_i - \tilde y_i)^2} \frac{l-n}{n} \sim \text{F}_{n,l-n} \quad\text{bed. }H_0\text{ gilt}$$
+$$T = \frac{\frac{\text{RSS}_1 - \text{RSS}_2}{p_1-p_2}}{\frac{\text{RSS}_2}{l-p_2}} = \frac{\sum_{i=1}^{n} (y_i - \hat y_i)^2 - \sum_{i=1}^{n} (y_i - \tilde y_i)^2}{\sum_{i=1}^{n} (y_i - \tilde y_i)^2} \frac{l-n}{n} \sim \text{F}_{n,l-n} \quad\text{bed. }H_0\text{ gilt}$$
 
 <!-- \frac{\sum_{i=1}^{n} (\hat y_i - \overline{\hat y})^2}{\sum_{i=1}^{n} (y_i - \tilde y_i)^2} \frac{l-n}{n} -->
 
@@ -487,7 +487,7 @@ result_df <- tibble(
     priceMax = numeric()
 )
 
-to_index <- 200#length(file_names_price)
+to_index <- length(file_names_price)
 
 for (name in file_names_price[1:to_index]) {
     symbol <- name %>% substr(1, nchar(name)-4)
